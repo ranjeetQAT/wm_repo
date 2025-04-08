@@ -1,0 +1,120 @@
+name: Watermelon Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      WM_USERNAME: ${{ secrets.V_USERNAME }}
+      WM_PASSWORD: ${{ secrets.V_PASSWORD }}
+      AUTH_PROVIDER_URL: 'https://auth-capg.watermelon.us/realms/watermelon/protocol/openid-connect/token'
+      EXECUTE_API_URL: 'https://sandbox-capg.watermelon.us/services/wmuitestcontroller/api/execute/test-packs'
+      STATUS_API_URL: 'https://sandbox-capg.watermelon.us/services/wmuitestcontroller/api/test-runs'
+      TEST_PACK_ID: '3051'
+      INITIAL_DELAY: 10   # Initial delay in seconds before starting polling
+      POLL_INTERVAL: 5    # Time in seconds between each status check
+      LONG_POLL_DURATION: 86400  # 24 hours in seconds
+      SHORT_POLL_DURATION: 21600  # 6 hours in seconds
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Authenticate and get token
+      run: |
+        echo "Fetching token from the authentication provider..."
+        echo "Username - $WM_USERNAME"
+        TOKEN=$(curl -k -X POST "$AUTH_PROVIDER_URL" \
+          -H "Content-Type: application/x-www-form-urlencoded" \
+          -d "client_id=web_app" \
+          -d "username=$WM_USERNAME" \
+          -d "password=$WM_PASSWORD" \
+          -d "grant_type=password" | jq -r '.access_token')
+        echo "Token fetched. Token - $TOKEN"
+        echo "TOKEN=$TOKEN" >> $GITHUB_ENV
+
+    - name: Trigger test pack execution and get run ID
+      run: |
+        echo "Triggering the test pack execution..."
+        echo "Execute_API_URL: ${EXECUTE_API_URL}"
+        echo "TEST_PACK_ID: ${TEST_PACK_ID}"
+        echo "TOKEN: $TOKEN"
+        # Trigger the execution API and parse the returned TestRunDTO to extract the run ID
+        TEST_RUN_DTO=$(curl -k -X GET "${EXECUTE_API_URL}?testPackId=${TEST_PACK_ID}&runNow=true" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json")
+          
+        echo "TestRunDTO received: $TEST_RUN_DTO"
+        
+        # Extract the run ID from the TestRunDTO response
+        RUN_ID=$(echo $TEST_RUN_DTO | jq -r '.id')
+      
+        echo "Run ID extracted: $RUN_ID"
+        echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+
+    - name: Poll for test run completion
+      run: |
+        echo "Waiting for $INITIAL_DELAY seconds before starting polling..."
+        sleep $INITIAL_DELAY
+        startTime=$(date +%s)
+        STATE="CREATED"
+        RUN_ID=$RUN_ID
+        TOKEN=$TOKEN
+        
+        while :; do
+            # Check if maximum polling duration is reached
+            currentTime=$(date +%s)
+            elapsedTime=$((currentTime - startTime))
+            echo "elapsedTime : $elapsedTime"
+            
+            # Determine maximum duration based on the state
+            if [[ "$STATE" == "IN_PROGRESS" || "$STATE" == "PAUSED" ]]; then
+                maxDuration=$LONG_POLL_DURATION
+            else
+                maxDuration=$SHORT_POLL_DURATION
+            fi
+            
+            # Check if elapsed time exceeds maximum duration
+            if [[ $elapsedTime -ge $maxDuration ]]; then
+                echo "Maximum polling duration reached. Current state: $STATE"
+                exit 1
+            fi
+            
+            # Fetch the TestRunDTO and extract the state and other properties
+            TEST_RUN_DTO=$(curl -k -X GET "${STATUS_API_URL}/${RUN_ID}" \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "Content-Type: application/json")
+            
+            # Parse the TestRunDTO
+            STATE=$(echo $TEST_RUN_DTO | jq -r '.state')
+            STATUS=$(echo $TEST_RUN_DTO | jq -r '.status')
+            REQUESTED_TIME=$(echo $TEST_RUN_DTO | jq -r '.requestedTime')
+            START_DATE=$(echo $TEST_RUN_DTO | jq -r '.startDate')
+            STOP_DATE=$(echo $TEST_RUN_DTO | jq -r '.stopDate')
+            
+            echo "Current state: $STATE"
+            
+            # Exit conditions
+            if [[ "$STATE" == "COMPLETED" ]]; then
+                echo "Test run completed successfully."
+                
+                # Print requested time, start date, stop date, and execution status
+                echo "Requested Time: $REQUESTED_TIME"
+                echo "Start Date: $START_DATE"
+                echo "Stop Date: $STOP_DATE"
+                echo "Execution Status: $STATUS"
+                
+                break
+            elif [[ "$STATE" == "CANCELLED" ]]; then
+                echo "Test run was cancelled."
+                exit 1
+            fi
+            
+            echo "Sleeping for $POLL_INTERVAL seconds before the next check..."
+            sleep $POLL_INTERVAL
+        done
