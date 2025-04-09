@@ -10,12 +10,12 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      WM_USERNAME: ${{ secrets.V_USERNAME }}
-      WM_PASSWORD: ${{ secrets.V_PASSWORD }}
-      AUTH_PROVIDER_URL: 'https://auth-capg.watermelon.us/realms/watermelon/protocol/openid-connect/token'
-      EXECUTE_API_URL: 'https://sandbox-capg.watermelon.us/services/wmuitestcontroller/api/execute/test-packs'
-      STATUS_API_URL: 'https://sandbox-capg.watermelon.us/services/wmuitestcontroller/api/test-runs'
-      TEST_PACK_ID: '3051'
+      WM_USERNAME: ${{ secrets.system }}
+      WM_PASSWORD: ${{ secrets.wmasyncsysusr }}
+      AUTH_PROVIDER_URL: 'https://wmsandbox5-auth.watermelon.us/realms/watermelon/protocol/openid-connect/token'
+      EXECUTE_API_URL: 'https://wmsandbox5.watermelon.us/services/wmuitestcontroller/api/execute/test-packs'
+      STATUS_API_URL: 'https://wmsandbox5.watermelon.us/services/wmuitestcontroller/api/test-runs'
+      TEST_PACK_ID: '1075701'
       INITIAL_DELAY: 10   # Initial delay in seconds before starting polling
       POLL_INTERVAL: 5    # Time in seconds between each status check
       LONG_POLL_DURATION: 86400  # 24 hours in seconds
