@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      WM_USERNAME: ${{ secrets.system }}
-      WM_PASSWORD: ${{ secrets.wmasyncsysusr }}
+      WM_USERNAME: ${{ secrets.V_USERNAME }}
+      WM_PASSWORD: ${{ secrets.V_PASSWORD }}
       AUTH_PROVIDER_URL: 'https://wmsandbox5-auth.watermelon.us/realms/watermelon/protocol/openid-connect/token'
       EXECUTE_API_URL: 'https://wmsandbox5.watermelon.us/services/wmuitestcontroller/api/execute/test-packs'
       STATUS_API_URL: 'https://wmsandbox5.watermelon.us/services/wmuitestcontroller/api/test-runs'
